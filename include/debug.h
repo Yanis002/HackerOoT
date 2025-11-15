@@ -9,6 +9,7 @@
 #include "debug/inventory_editor.h"
 #include "debug/menu.h"
 #include "debug/profiler.h"
+#include "debug/preview.h"
 #include "z_math.h"
 
 #define DEBUG_PRINT_VAR(var) PRINTF("%s: %d\n", #var, var)
@@ -28,6 +29,7 @@ typedef struct Debug {
     PrintUtils printer;
     Menu menu;
     InventoryEditor invDebug;
+    PreviewState preview;
 } Debug;
 
 void Debug_DrawColorRectangle(Vec2s rectLeft, Vec2s rectRight, Color_RGBA8 rgba);

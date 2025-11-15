@@ -32,6 +32,7 @@
 #include "helpers.h"
 #include "scene.h"
 #include "assert.h"
+#include "debug.h"
 
 static void MapSelect_InitSpawnState(MapSelectState* this);
 
@@ -119,12 +120,31 @@ void MapSelect_Init(GameState* thisx) {
 #endif
 
     MapSelect_InitSpawnState(this);
+    Preview_SetView(&gDebug.preview, &this->view);
+    this->currentScene = 2;
+    gDebug.preview.overrideInput = true;
 }
+
+static u8 overrideInput = true;
 
 void MapSelect_Main(GameState* thisx) {
     MapSelectState* this = (MapSelectState*)thisx;
+    s32 entranceIndex = this->scenes[this->currentScene].entranceIndex;
 
-    MapSelect_UpdateMenu(this);
+    if (CHECK_BTN_ALL(this->state.input[0].press.button, BTN_START)) {
+        gDebug.preview.overrideInput ^= 1;
+        overrideInput ^= 1;
+        PRINTF("input override mode: %d\n", gDebug.preview.overrideInput);
+        return;
+    }
+
+    Preview_SetSceneId(&gDebug.preview, gEntranceTable[entranceIndex < 0 ? 0 : entranceIndex].sceneId);
+    Preview_Main(&gDebug.preview);
+
+    if (!overrideInput) {
+        MapSelect_UpdateMenu(this);
+    }
+
     MapSelect_Draw(this);
 }
 
@@ -134,7 +154,7 @@ void MapSelect_Draw(MapSelectState* this) {
     OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
 
     gSPSegment(POLY_OPA_DISP++, 0x00, NULL);
-    Gfx_SetupFrame(gfxCtx, true, 0, 0, 0);
+    Gfx_SetupFrame(gfxCtx, false, 0, 0, 0);
     SET_FULLSCREEN_VIEWPORT(&this->view);
     View_Apply(&this->view, VIEW_ALL);
     Gfx_SetupDL_28Opa(gfxCtx);
@@ -380,6 +400,7 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
                 Audio_PlaySfxGeneral(NA_SE_SY_CURSOR, &gSfxDefaultPos, 4, &gSfxDefaultFreqAndVolScale,
                                      &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
                 this->verticalInput = R_UPDATE_RATE;
+                Preview_SetTimer(&gDebug.preview, PREVIEW_TIMER);
             }
         }
 
@@ -400,6 +421,7 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
                 Audio_PlaySfxGeneral(NA_SE_SY_CURSOR, &gSfxDefaultPos, 4, &gSfxDefaultFreqAndVolScale,
                                      &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
                 this->verticalInput = -R_UPDATE_RATE;
+                Preview_SetTimer(&gDebug.preview, PREVIEW_TIMER);
             }
         }
 
@@ -428,6 +450,7 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
         this->pageDownIndex =
             (this->pageDownIndex + ARRAY_COUNT(this->pageDownStops)) % ARRAY_COUNT(this->pageDownStops);
         this->currentScene = this->topDisplayedScene = this->pageDownStops[this->pageDownIndex];
+        Preview_SetTimer(&gDebug.preview, PREVIEW_TIMER);
     }
 
     this->verticalInputAccumulator += this->verticalInput;

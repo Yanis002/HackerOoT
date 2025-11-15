@@ -544,12 +544,18 @@ void GameState_Init(GameState* gameState, GameStateFunc init, GraphicsContext* g
 #if ENABLE_HACKER_DEBUG
     gDebug.input = &gameState->input[0];
     Menu_Init(&gDebug.menu);
+    Preview_SetGameState(&gDebug.preview, gameState);
+    Preview_Init(&gDebug.preview);
 #endif
 
     PRINTF(T("game コンストラクタ終了\n", "game constructor end\n"));
 }
 
 void GameState_Destroy(GameState* gameState) {
+#if ENABLE_HACKER_DEBUG
+    Preview_Destroy(&gDebug.preview);
+#endif
+
     PRINTF(T("game デストラクタ開始\n", "game destructor start\n"));
     AudioMgr_StopAllSfx();
     Audio_Update();

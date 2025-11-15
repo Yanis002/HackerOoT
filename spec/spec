@@ -880,6 +880,7 @@ beginseg
 #if ENABLE_UNF
     include "$(BUILD_DIR)/src/debug/commands.o"
 #endif
+    include "$(BUILD_DIR)/src/debug/preview.o"
 endseg
 #endif
 
