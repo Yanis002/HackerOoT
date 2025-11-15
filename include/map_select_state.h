@@ -51,5 +51,6 @@ void MapSelect_PrintLoadingMessage(MapSelectState* this, struct GfxPrint* printe
 void MapSelect_PrintAgeSetting(MapSelectState* this, struct GfxPrint* printer, s32 age);
 void MapSelect_PrintSceneLayerSetting(MapSelectState* this, struct GfxPrint* printer);
 void MapSelect_PrintControls(MapSelectState* this, struct GfxPrint* printer);
+void MapSelect_PrintSpawnNumber(MapSelectState* this, struct GfxPrint* printer);
 
 #endif

@@ -47,12 +47,13 @@ static const char* sLoadingMessages[] = {
 // The first element of the next 3 arrays needs to stay at the index 0
 
 static const char* sControlLabels[] = {
-    "[C-Down]: Show/Hide Controls",
+    "[Start]: Show/Hide Controls",
     "[D-Pad]: Select Scene",
     "[B]: Change Link's Age",
     "[Z],[R]: Change the Scene Layer",
-    "[A],[Start]: Load the scene",
-    "[C-Left/Right]: Selection Color", // only for selected scene color in the list
+    "[C-Left/Right]: Change the spawn number",
+    "[A]: Load the scene",
+    "[C-Up/Down]: Selection Color", // only for selected scene color in the list
     "[L],Controls Page: Play/Stop BGM",
 };
 
@@ -71,9 +72,9 @@ static MapSelectEntry sScenes[] = {
 #include "testsuite/map_select.h"
 #endif
 #if IS_DEBUG_BOOT_ENABLED
-    { "Boot Menu", (void*)MapSelect_LoadDebugOpening, 0 },
+    { "Boot Menu", (void*)MapSelect_LoadDebugOpening, -1 },
 #endif
-    { "Title Screen", (void*)MapSelect_LoadTitle, 0 },
+    { "Title Screen", (void*)MapSelect_LoadTitle, -1 },
 #if CAN_INCLUDE_EXAMPLE_SCENE
     { "Example", MapSelect_LoadGame, ENTR_EXAMPLE_0 },
 #endif

@@ -30,6 +30,10 @@
 #include "save.h"
 #include "sram.h"
 #include "helpers.h"
+#include "scene.h"
+#include "assert.h"
+
+static void MapSelect_InitSpawnState(MapSelectState* this);
 
 #if PLATFORM_N64
 void func_80800AD0_unknown(MapSelectState* this, s32 arg1) {
@@ -113,6 +117,8 @@ void MapSelect_Init(GameState* thisx) {
 #else
 #define MAP_SELECT_BGM NA_BGM_NO_MUSIC
 #endif
+
+    MapSelect_InitSpawnState(this);
 }
 
 void MapSelect_Main(GameState* thisx) {
@@ -152,20 +158,114 @@ void MapSelect_Destroy(GameState* thisx) {
 #endif
 }
 
+// arbitrary value for a global spawn count
+#define MAX_SPAWN 32
+
+typedef struct SpawnState {
+    u8 spawn;
+    s16 maxSpawn;
+    s32 entranceMap[MAX_SPAWN]; // maps spawns to entrances
+} SpawnState;
+
+// array mapping scene IDs to the maximum number of spawn they have
+static SpawnState sSpawnState[SCENE_ID_MAX];
+
+static SpawnState* MapSelect_GetSpawnState(MapSelectState* this) {
+    return &sSpawnState[gEntranceTable[this->scenes[this->currentScene].entranceIndex].sceneId];
+}
+
+// initialize sSpawnState array
+static void MapSelect_InitSpawnState(MapSelectState* this) {
+    s32 i;
+    s32 j;
+    s32 k;
+
+    // init default values
+    for (i = 0; i < ARRAY_COUNT(sSpawnState); i++) {
+        sSpawnState[i].spawn = 0;
+        sSpawnState[i].maxSpawn = -1;
+        memset(sSpawnState[i].entranceMap, -1, sizeof(sSpawnState[i].entranceMap));
+    }
+
+    // init maxSpawn
+    for (i = 0; i < ARRAY_COUNT(gEntranceTable); i++) {
+        EntranceInfo* entrance = &gEntranceTable[i];
+        SpawnState* pState = &sSpawnState[entrance->sceneId];
+
+        if (entrance->spawn > pState->maxSpawn) {
+            pState->maxSpawn = entrance->spawn;
+            ASSERT(pState->maxSpawn < MAX_SPAWN,
+                   "[HackerOoT:Error]: Higher number of spawns than expected, increase the value of MAX_SPAWN.",
+                   __FILE__, __LINE__);
+        }
+    }
+
+    // init entrance map
+    // we map each spawn to the right entrance during the init process so later when we need the entrance index
+    // we'll just have to read the array and that's basically it, i = scene id, j = spawn number and k = entrance index
+    for (i = 0; i < ARRAY_COUNT(sSpawnState); i++) {
+        SpawnState* pState = &sSpawnState[i];
+
+        for (j = 0; j < MAX_SPAWN; j++) {
+            for (k = 0; k < ARRAY_COUNT(gEntranceTable); k++) {
+                EntranceInfo* entrance = &gEntranceTable[k];
+
+                if (entrance->sceneId == i && entrance->spawn == j) {
+                    pState->entranceMap[j] = k;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+// returns the selected spawn value
+static s16 MapSelect_GetSpawn(MapSelectState* this) {
+    return MapSelect_GetSpawnState(this)->spawn;
+}
+
+// returns the entrance index
+static s32 MapSelect_GetEntranceIndex(MapSelectState* this) {
+    SpawnState* pState = MapSelect_GetSpawnState(this);
+    MapSelectEntry* pEntry = &this->scenes[this->currentScene];
+    s32 entranceIndex = pState->spawn < pState->maxSpawn ? pState->entranceMap[pState->spawn] : pEntry->entranceIndex;
+    return entranceIndex >= 0 ? entranceIndex : 0;
+}
+
+// returns the maximum spawn value
+static s16 MapSelect_GetMaxSpawn(MapSelectState* this) {
+    s16 max = MapSelect_GetSpawnState(this)->maxSpawn;
+    return max > 0 ? max : 0;
+}
+
+// checks if the selected spawn is valid
+static bool MapSelect_IsSpawnValid(MapSelectState* this) {
+    SpawnState* pState = MapSelect_GetSpawnState(this);
+    s16 maxSpawn = MapSelect_GetMaxSpawn(this);
+
+    if (pState->maxSpawn >= 0 && pState->spawn < pState->maxSpawn) {
+        return true;
+    }
+
+    return false;
+}
+
 void MapSelect_UpdateMenu(MapSelectState* this) {
     Input* input = &this->state.input[0];
     s32 pad;
     MapSelectEntry* selectedScene;
     u16 sfx, sfxIndex;
+    s16 maxSpawn = MapSelect_GetMaxSpawn(this);
+    SpawnState* pState = MapSelect_GetSpawnState(this);
 
-    if (CHECK_BTN_ALL(input->press.button, BTN_CDOWN)) {
+    if (CHECK_BTN_ALL(input->press.button, BTN_START)) {
         this->showControls = !this->showControls;
         Audio_PlaySfxGeneral(NA_SE_SY_FSEL_DECIDE_L, &gSfxDefaultPos, 4, &gSfxDefaultFreqAndVolScale,
                              &gSfxDefaultFreqAndVolScale, &gSfxDefaultReverb);
     }
 
     // change the color of the selected scene, red by default
-    if (CHECK_BTN_ALL(input->press.button, BTN_CRIGHT)) {
+    if (CHECK_BTN_ALL(input->press.button, BTN_CUP)) {
         if (this->selectedSceneColor == (ARRAY_COUNT(sColors) - 1)) {
             this->selectedSceneColor = 0;
         } else {
@@ -177,7 +277,7 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
         }
     }
 
-    if (CHECK_BTN_ALL(input->press.button, BTN_CLEFT)) {
+    if (CHECK_BTN_ALL(input->press.button, BTN_CDOWN)) {
         if (this->selectedSceneColor == 0) {
             this->selectedSceneColor = (ARRAY_COUNT(sColors) - 1);
         } else {
@@ -186,6 +286,22 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
 
         if (this->selectedSceneColor == 1) {
             this->selectedSceneColor--;
+        }
+    }
+
+    if (CHECK_BTN_ALL(input->press.button, BTN_CRIGHT)) {
+        if (pState->spawn == maxSpawn) {
+            pState->spawn = 0;
+        } else {
+            pState->spawn++;
+        }
+    }
+
+    if (CHECK_BTN_ALL(input->press.button, BTN_CLEFT)) {
+        if (pState->spawn == 0) {
+            pState->spawn = maxSpawn;
+        } else {
+            pState->spawn--;
         }
     }
 
@@ -210,10 +326,10 @@ void MapSelect_UpdateMenu(MapSelectState* this) {
 
     if (this->verticalInputAccumulator == 0) {
         // load the scene
-        if (CHECK_BTN_ALL(input->press.button, BTN_A) || CHECK_BTN_ALL(input->press.button, BTN_START)) {
+        if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
             selectedScene = &this->scenes[this->currentScene];
             if (selectedScene->loadFunc != NULL) {
-                selectedScene->loadFunc(this, selectedScene->entranceIndex);
+                selectedScene->loadFunc(this, MapSelect_GetEntranceIndex(this));
             }
         }
 
@@ -389,6 +505,7 @@ void MapSelect_DrawMenu(MapSelectState* this) {
         MapSelect_PrintMenu(this, printer);
         MapSelect_PrintAgeSetting(this, printer, ((void)0, gSaveContext.save.linkAge));
         MapSelect_PrintSceneLayerSetting(this, printer);
+        MapSelect_PrintSpawnNumber(this, printer);
     }
     MapSelect_PrintControls(this, printer);
 
@@ -580,6 +697,12 @@ void MapSelect_PrintSceneLayerSetting(MapSelectState* this, GfxPrint* printer) {
     GfxPrint_Printf(printer, "Scene Layer: %s", label);
 }
 
+void MapSelect_PrintSpawnNumber(MapSelectState* this, GfxPrint* printer) {
+    GfxPrint_SetPos(printer, 4, 27);
+    GfxPrint_SetColor(printer, 55, 255, 55, 255);
+    GfxPrint_Printf(printer, "Spawn: %d/%d", MapSelect_GetSpawn(this), MapSelect_GetMaxSpawn(this));
+}
+
 void MapSelect_PrintControls(MapSelectState* this, GfxPrint* printer) {
     u8 i, posY = 2;
     Color_RGBA8 colors;
@@ -591,12 +714,12 @@ void MapSelect_PrintControls(MapSelectState* this, GfxPrint* printer) {
         }
 
         // for anything but "Show/Hide Controls",
-        // increment Y-Pos by 2, else set it to 27
+        // increment Y-Pos by 2, else set it to 28
         // to move it at the bottom of the screen
         if (i > 0) {
             posY += 2;
         } else {
-            posY = 27;
+            posY = 28;
         }
 
         colors = sColors[i];
