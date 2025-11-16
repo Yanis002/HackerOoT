@@ -1889,7 +1889,7 @@ void Play_InitScene(PlayState* this, s32 spawn) {
 
     this->numActorEntries = 0;
 
-    Object_InitContext(this, &this->objectCtx);
+    Object_InitContext(&this->state, &this->objectCtx, true);
     LightContext_Init(this, &this->lightCtx);
     Scene_ResetTransitionActorList(&this->state, &this->transitionActors);
     Room_Init(this, &this->roomCtx.curRoom);

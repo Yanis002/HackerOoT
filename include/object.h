@@ -37,7 +37,7 @@ typedef enum ObjectId {
 #undef DEFINE_OBJECT_EMPTY
 #undef DEFINE_OBJECT_UNSET
 
-void Object_InitContext(struct PlayState* play, ObjectContext* objectCtx);
+void Object_InitContext(struct GameState* gameState, ObjectContext* objectCtx, u8 gameAlloc);
 void Object_UpdateEntries(ObjectContext* objectCtx);
 s32 Object_GetSlot(ObjectContext* objectCtx, s16 objectId);
 s32 Object_IsLoaded(ObjectContext* objectCtx, s32 slot);

@@ -47,7 +47,6 @@ void MapSelect_LoadTitle(MapSelectState* this);
 void MapSelect_LoadDebugOpening(MapSelectState* this);
 void MapSelect_LoadGame(MapSelectState* this, s32 entranceIndex);
 void MapSelect_PrintMenu(MapSelectState* this, struct GfxPrint* printer);
-void MapSelect_PrintLoadingMessage(MapSelectState* this, struct GfxPrint* printer, u8 yPos);
 void MapSelect_PrintAgeSetting(MapSelectState* this, struct GfxPrint* printer, s32 age);
 void MapSelect_PrintSceneLayerSetting(MapSelectState* this, struct GfxPrint* printer);
 void MapSelect_PrintControls(MapSelectState* this, struct GfxPrint* printer);

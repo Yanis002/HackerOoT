@@ -16,6 +16,7 @@
 #include "player.h"
 #include "save.h"
 #include "scene.h"
+#include "libc64/malloc.h"
 
 SceneCmdHandlerFunc sSceneCmdHandlers[SCENE_CMD_ID_MAX];
 RomFile sNaviQuestHintFiles[];
@@ -71,8 +72,7 @@ s32 Object_SpawnPersistent(ObjectContext* objectCtx, s16 objectId) {
 #define OBJECT_SPACE_ADJUSTMENT (4 * 1024)
 #endif
 
-void Object_InitContext(PlayState* play, ObjectContext* objectCtx) {
-    PlayState* play2 = play;
+void Object_InitContext(GameState* gameState, ObjectContext* objectCtx, u8 gameAlloc) {
     s32 pad;
     u32 spaceSize;
     s32 i;
@@ -91,8 +91,13 @@ void Object_InitContext(PlayState* play, ObjectContext* objectCtx) {
     PRINTF(T("オブジェクト入れ替えバンク情報 %8.3fKB\n", "Object exchange bank data %8.3fKB\n"), spaceSize / 1024.0f);
     PRINTF_RST();
 
-    objectCtx->spaceStart = objectCtx->slots[0].segment =
-        GAME_STATE_ALLOC(&play->state, spaceSize, "../z_scene.c", 219);
+    if (gameAlloc) {
+        objectCtx->spaceStart = objectCtx->slots[0].segment =
+            GAME_STATE_ALLOC(gameState, spaceSize, "../z_scene.c", 219);
+    } else {
+        objectCtx->spaceStart = objectCtx->slots[0].segment = SYSTEM_ARENA_MALLOC(spaceSize);
+    }
+
     objectCtx->spaceEnd = (void*)((uintptr_t)objectCtx->spaceStart + spaceSize);
 
     objectCtx->mainKeepSlot = Object_SpawnPersistent(objectCtx, OBJECT_GAMEPLAY_KEEP);
@@ -271,7 +276,7 @@ BAD_RETURN(s32) Scene_CommandRoomShape(PlayState* play, SceneCmd* cmd) {
     play->roomCtx.curRoom.roomShape = SEGMENTED_TO_VIRTUAL(cmd->mesh.data);
 }
 
-BAD_RETURN(s32) Scene_CommandObjectList(PlayState* play, SceneCmd* cmd) {
+void Scene_CommandObjectListImpl(ObjectContext* objectCtx, ActorContext* actorCtx, SceneCmd* cmd) {
     s32 i;
     s32 j;
     s32 k;
@@ -282,21 +287,21 @@ BAD_RETURN(s32) Scene_CommandObjectList(PlayState* play, SceneCmd* cmd) {
     void* nextPtr;
 
     k = 0;
-    i = play->objectCtx.numPersistentEntries;
-    entries = play->objectCtx.slots;
-    entry = &play->objectCtx.slots[i];
+    i = objectCtx->numPersistentEntries;
+    entries = objectCtx->slots;
+    entry = &objectCtx->slots[i];
 
-    while (i < play->objectCtx.numEntries) {
+    while (i < objectCtx->numEntries) {
         if (entry->id != *objectListEntry) {
 
-            invalidatedEntry = &play->objectCtx.slots[i];
-            for (j = i; j < play->objectCtx.numEntries; j++) {
+            invalidatedEntry = &objectCtx->slots[i];
+            for (j = i; j < objectCtx->numEntries; j++) {
                 invalidatedEntry->id = OBJECT_INVALID;
                 invalidatedEntry++;
             }
 
-            play->objectCtx.numEntries = i;
-            Actor_KillAllWithMissingObject(play, &play->actorCtx);
+            objectCtx->numEntries = i;
+            Actor_KillAllWithMissingObject(objectCtx, actorCtx);
 
             continue;
         }
@@ -307,12 +312,12 @@ BAD_RETURN(s32) Scene_CommandObjectList(PlayState* play, SceneCmd* cmd) {
         entry++;
     }
 
-    ASSERT(cmd->objectList.length <= ARRAY_COUNT(play->objectCtx.slots),
+    ASSERT(cmd->objectList.length <= ARRAY_COUNT(objectCtx->slots),
            "scene_info->object_bank.num <= OBJECT_EXCHANGE_BANK_MAX", "../z_scene.c", 705);
 
     while (k < cmd->objectList.length) {
-        nextPtr = func_800982FC(&play->objectCtx, i, *objectListEntry);
-        if (i < (ARRAY_COUNT(play->objectCtx.slots) - 1)) {
+        nextPtr = func_800982FC(objectCtx, i, *objectListEntry);
+        if (i < (ARRAY_COUNT(objectCtx->slots) - 1)) {
             entries[i + 1].segment = nextPtr;
         }
         i++;
@@ -320,7 +325,11 @@ BAD_RETURN(s32) Scene_CommandObjectList(PlayState* play, SceneCmd* cmd) {
         objectListEntry++;
     }
 
-    play->objectCtx.numEntries = i;
+    objectCtx->numEntries = i;
+}
+
+BAD_RETURN(s32) Scene_CommandObjectList(PlayState* play, SceneCmd* cmd) {
+    Scene_CommandObjectListImpl(&play->objectCtx, &play->actorCtx, cmd);
 }
 
 BAD_RETURN(s32) Scene_CommandLightList(PlayState* play, SceneCmd* cmd) {
@@ -362,27 +371,27 @@ BAD_RETURN(s32) Scene_CommandSkyboxDisables(PlayState* play, SceneCmd* cmd) {
     play->envCtx.sunMoonDisabled = cmd->skyboxDisables.sunMoonDisabled;
 }
 
-BAD_RETURN(s32) Scene_CommandTimeSettings(PlayState* play, SceneCmd* cmd) {
+void Scene_CommandTimeSettingsImpl(EnvironmentContext* envCtx, SceneCmd* cmd) {
     if ((cmd->timeSettings.hour != 0xFF) && (cmd->timeSettings.min != 0xFF)) {
         gSaveContext.skyboxTime = gSaveContext.save.dayTime =
             ((cmd->timeSettings.hour + (cmd->timeSettings.min / 60.0f)) * 60.0f) / ((f32)(24 * 60) / 0x10000);
     }
 
     if (cmd->timeSettings.timeSpeed != 0xFF) {
-        play->envCtx.sceneTimeSpeed = cmd->timeSettings.timeSpeed;
+        envCtx->sceneTimeSpeed = cmd->timeSettings.timeSpeed;
     } else {
-        play->envCtx.sceneTimeSpeed = 0;
+        envCtx->sceneTimeSpeed = 0;
     }
 
     if (gSaveContext.sunsSongState == SUNSSONG_INACTIVE) {
-        gTimeSpeed = play->envCtx.sceneTimeSpeed;
+        gTimeSpeed = envCtx->sceneTimeSpeed;
     }
 
-    play->envCtx.sunPos.x = -(Math_SinS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 120.0f) * 25.0f;
-    play->envCtx.sunPos.y = (Math_CosS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 120.0f) * 25.0f;
-    play->envCtx.sunPos.z = (Math_CosS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 20.0f) * 25.0f;
+    envCtx->sunPos.x = -(Math_SinS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 120.0f) * 25.0f;
+    envCtx->sunPos.y = (Math_CosS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 120.0f) * 25.0f;
+    envCtx->sunPos.z = (Math_CosS(((void)0, gSaveContext.save.dayTime) - CLOCK_TIME(12, 0)) * 20.0f) * 25.0f;
 
-    if (((play->envCtx.sceneTimeSpeed == 0) && (gSaveContext.save.cutsceneIndex < CS_INDEX_0)) ||
+    if (((envCtx->sceneTimeSpeed == 0) && (gSaveContext.save.cutsceneIndex < CS_INDEX_0)) ||
         (gSaveContext.save.entranceIndex == ENTR_LAKE_HYLIA_8)) {
 #if OOT_VERSION >= PAL_1_0
         gSaveContext.skyboxTime = ((void)0, gSaveContext.save.dayTime);
@@ -406,6 +415,10 @@ BAD_RETURN(s32) Scene_CommandTimeSettings(PlayState* play, SceneCmd* cmd) {
             gSaveContext.skyboxTime = CLOCK_TIME(19, 0) + 1;
         }
     }
+}
+
+BAD_RETURN(s32) Scene_CommandTimeSettings(PlayState* play, SceneCmd* cmd) {
+    Scene_CommandTimeSettingsImpl(&play->envCtx, cmd);
 }
 
 BAD_RETURN(s32) Scene_CommandWindSettings(PlayState* play, SceneCmd* cmd) {

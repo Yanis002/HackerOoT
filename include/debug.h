@@ -14,6 +14,7 @@
 
 #define DEBUG_PRINT_VAR(var) PRINTF("%s: %d\n", #var, var)
 
+#define PACK_COLOR(r, g, b) ((((r) & 0xFF) << 16) | (((g) & 0xFF) << 8) | ((b) & 0xFF))
 #define COLOR_WHITE (0xFFFFFF)
 #define COLOR_RED (0xFF0000)
 #define COLOR_GREEN (0x00FF00)

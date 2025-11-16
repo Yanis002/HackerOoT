@@ -28,6 +28,7 @@ struct CollisionPoly;
 struct Lights;
 struct Player;
 struct PlayState;
+struct ObjectContext;
 
 typedef void (*ActorShadowFunc)(struct Actor*, struct Lights*, struct PlayState*);
 typedef u16 (*NpcGetTextIdFunc)(struct PlayState*, struct Actor*);
@@ -730,7 +731,7 @@ void Actor_InitContext(struct PlayState* play, ActorContext* actorCtx, struct Ac
 void Actor_UpdateAll(struct PlayState* play, ActorContext* actorCtx);
 s32 Actor_CullingVolumeTest(struct PlayState* play, Actor* actor, Vec3f* projPos, f32 projW);
 void Actor_DrawAll(struct PlayState* play, ActorContext* actorCtx);
-void Actor_KillAllWithMissingObject(struct PlayState* play, ActorContext* actorCtx);
+void Actor_KillAllWithMissingObject(struct ObjectContext* objectCtx, ActorContext* actorCtx);
 void func_80031B14(struct PlayState* play, ActorContext* actorCtx);
 void func_80031C3C(ActorContext* actorCtx, struct PlayState* play);
 Actor* Actor_Spawn(ActorContext* actorCtx, struct PlayState* play, s16 actorId, f32 posX, f32 posY, f32 posZ, s16 rotX,

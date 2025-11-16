@@ -29,6 +29,7 @@
 #include "skin_matrix.h"
 #include "config.h"
 #include "widescreen.h"
+#include "object.h"
 
 #include "overlays/actors/ovl_Arms_Hook/z_arms_hook.h"
 #include "overlays/actors/ovl_En_Part/z_en_part.h"
@@ -3021,14 +3022,14 @@ void Actor_DrawAll(PlayState* play, ActorContext* actorCtx) {
 /**
  * Kill every actor which depends on an object that is not loaded.
  */
-void Actor_KillAllWithMissingObject(PlayState* play, ActorContext* actorCtx) {
+void Actor_KillAllWithMissingObject(ObjectContext* objectCtx, ActorContext* actorCtx) {
     Actor* actor;
     s32 i;
 
     for (i = 0; i < ARRAY_COUNT(actorCtx->actorLists); i++) {
         actor = actorCtx->actorLists[i].head;
         while (actor != NULL) {
-            if (!Object_IsLoaded(&play->objectCtx, actor->objectSlot)) {
+            if (!Object_IsLoaded(objectCtx, actor->objectSlot)) {
                 Actor_Kill(actor);
             }
             actor = actor->next;

@@ -12,6 +12,11 @@
 #include "sys_matrix.h"
 #include "widescreen.h"
 #include "libc64/malloc.h"
+#include "regs.h"
+
+extern s32 Object_SpawnPersistent(ObjectContext* objectCtx, s16 objectId);
+extern void Scene_CommandTimeSettingsImpl(EnvironmentContext* envCtx, SceneCmd* cmd);
+extern void Scene_CommandObjectListImpl(ObjectContext* objectCtx, ActorContext* actorCtx, SceneCmd* cmd);
 
 static GameState* sGameState = NULL;
 static View* sView = NULL;
@@ -19,13 +24,35 @@ static OSMesgQueue queue;
 static OSMesg msg;
 static DmaRequest req;
 
+static Gfx sDefaultDisplayList[] = {
+    gsSPSegment(0x08, gEmptyDL),
+    gsSPSegment(0x09, gEmptyDL),
+    gsSPSegment(0x0A, gEmptyDL),
+    gsSPSegment(0x0B, gEmptyDL),
+    gsSPSegment(0x0C, gEmptyDL),
+    gsSPSegment(0x0D, gEmptyDL),
+    gsDPPipeSync(),
+    gsDPSetPrimColor(0, 0, 128, 128, 128, 128),
+    gsDPSetEnvColor(128, 128, 128, 128),
+    gsSPEndDisplayList(),
+};
+
 enum {
+    EDIT_MODE_MIN,
     EDIT_MODE_POS,
     EDIT_MODE_ROT,
     EDIT_MODE_SCALE,
+    EDIT_MODE_EYE,
+    EDIT_MODE_AT,
+    EDIT_MODE_MAX,
 };
 
 void Preview_Debug(PreviewState* this) {
+    static const char* modeToStr[] = {
+        "EDIT_MODE_MIN", "EDIT_MODE_POS", "EDIT_MODE_ROT", "EDIT_MODE_SCALE",
+        "EDIT_MODE_EYE", "EDIT_MODE_AT",  "EDIT_MODE_MAX",
+    };
+
     void* vec = NULL;
 
     if (!this->overrideInput) {
@@ -60,12 +87,16 @@ void Preview_Debug(PreviewState* this) {
 
     if (CHECK_BTN_ALL(this->state->input[0].press.button, BTN_A)) {
         this->editMode++;
-        PRINTF("new edit mode (a): %d\n", this->editMode);
+        if (this->editMode > EDIT_MODE_MIN && this->editMode < EDIT_MODE_MAX) {
+            PRINTF("new edit mode (a): %s (%d)\n", modeToStr[this->editMode], this->editMode);
+        }
     }
 
     if (CHECK_BTN_ALL(this->state->input[0].press.button, BTN_B)) {
         this->editMode--;
-        PRINTF("new edit mode (b): %d\n", this->editMode);
+        if (this->editMode > EDIT_MODE_MIN && this->editMode < EDIT_MODE_MAX) {
+            PRINTF("new edit mode (b): %s (%d)\n", modeToStr[this->editMode], this->editMode);
+        }
     }
 
     switch (this->editMode) {
@@ -77,6 +108,12 @@ void Preview_Debug(PreviewState* this) {
             break;
         case EDIT_MODE_SCALE:
             vec = &this->matrixScale;
+            break;
+        case EDIT_MODE_EYE:
+            vec = &this->worldEye;
+            break;
+        case EDIT_MODE_AT:
+            vec = &this->worldAt;
             break;
         default:
             vec = NULL;
@@ -93,7 +130,7 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->x--;
             } else {
                 vecF->x -= 0.01f;
@@ -106,7 +143,7 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->x++;
             } else {
                 vecF->x += 0.01f;
@@ -120,7 +157,7 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->y--;
             } else {
                 vecF->y -= 0.01f;
@@ -133,7 +170,7 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->y++;
             } else {
                 vecF->y += 0.01f;
@@ -147,7 +184,7 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->z--;
             } else {
                 vecF->z -= 0.01f;
@@ -160,12 +197,24 @@ void Preview_Debug(PreviewState* this) {
         } else {
             Vec3f* vecF = ((Vec3f*)vec);
 
-            if (this->editMode == EDIT_MODE_POS) {
+            if (this->editMode != EDIT_MODE_SCALE) {
                 vecF->z++;
             } else {
                 vecF->z += 0.01f;
             }
         }
+    }
+
+    if (this->editMode > EDIT_MODE_MIN && this->editMode < EDIT_MODE_MAX) {
+        PRINTF("edit mode (b): %s (%d) - ", modeToStr[this->editMode], this->editMode);
+    }
+
+    if (this->editMode == EDIT_MODE_ROT) {
+        Vec3s* vecS = ((Vec3s*)vec);
+        PRINTF("x=%d, y=%d, z=%d\n", vecS->x, vecS->y, vecS->z);
+    } else {
+        Vec3f* vecF = ((Vec3f*)vec);
+        PRINTF("x=%.2f, y=%.2f, z=%.2f\n", vecF->x, vecF->y, vecF->z);
     }
 }
 
@@ -215,9 +264,17 @@ void Preview_FreeRoom(PreviewState* this) {
     }
 }
 
+void Preview_FreeObjectAlloc(PreviewState* this) {
+    if (this->objectCtx.spaceStart != NULL) {
+        SYSTEM_ARENA_FREE(this->objectCtx.spaceStart);
+        this->objectCtx.spaceStart = NULL;
+    }
+}
+
 void Preview_Reset(PreviewState* this) {
     u8 overrideInput = this->overrideInput;
 
+    Preview_FreeObjectAlloc(this);
     Preview_FreeRoom(this);
     Preview_FreeScene(this);
 
@@ -233,60 +290,123 @@ void Preview_Reset(PreviewState* this) {
     this->dmaTimer = 0;
     this->doLoad = true;
     this->curRoom.num = 0;
+    this->editMode = EDIT_MODE_POS;
 
-    this->worldAt.x = 0;
+    this->worldAt.x = 0.0f;
     this->worldAt.y = 0.0f;
-    this->worldAt.z = 0;
+    this->worldAt.z = 0.0f;
 
-    this->worldEye.x = 100.0f;
-    this->worldEye.y = 5.0f;
-    this->worldEye.z = -3.0f;
+    this->worldEye.x = 0.0f;
+    this->worldEye.y = 250.0f;
+    this->worldEye.z = 0.0f;
 
-    this->matrixPos.x = -210.0f;
-    this->matrixPos.y = 15.0f;
-    this->matrixPos.z = 45.0f;
+    this->matrixPos.x = 0.0f;
+    this->matrixPos.y = 0.0f;
+    this->matrixPos.z = 0.0f;
 
     this->matrixRot.x = 0;
-    this->matrixRot.y = -8400;
-    this->matrixRot.z = -6800;
+    this->matrixRot.y = 0;
+    this->matrixRot.z = 0;
 
-    this->matrixScale.x = 0.35f;
-    this->matrixScale.y = 0.35f;
-    this->matrixScale.z = 0.35f;
+    this->matrixScale.x = 0.50f;
+    this->matrixScale.y = 0.50f;
+    this->matrixScale.z = 0.50f;
+}
+
+void Preview_UpdateView(PreviewState* this) {
+    Vec3s center;
+
+    center.x = (this->colHeader.minBounds.x + this->colHeader.maxBounds.x) / 2;
+    center.y = (this->colHeader.minBounds.y + this->colHeader.maxBounds.y) / 2;
+    center.z = (this->colHeader.minBounds.z + this->colHeader.maxBounds.z) / 2;
+
+    // this->matrixPos.x = center.x;
+    this->worldEye.y += center.y;
+    // this->matrixPos.z = center.z;
 }
 
 void Preview_InitScene(PreviewState* this) {
-    SceneCmd* sceneCmd;
+    CollisionHeader* colHeader;
+    SceneCmd* cmd;
     u32 cmdCode;
 
     ASSERT(this->sceneSegment != NULL, "[HackerOoT:Error]: the scene segment is NULL", __FILE__, __LINE__);
     gSegments[2] = OS_K0_TO_PHYSICAL(this->sceneSegment);
 
-    // init scene (the play argument is unused)
-    LightContext_Init(NULL, &this->lightCtx);
+    // init scene
+    Object_InitContext(this->state, &this->objectCtx, false);
+    ASSERT(this->objectCtx.spaceStart != NULL && this->objectCtx.slots[0].segment != NULL,
+           "[HackerOoT:Error]: the object segment is NULL", __FILE__, __LINE__);
+    LightContext_Init(NULL, &this->lightCtx); // the play argument is unused
     this->roomList.romFiles = NULL;
 
     // execute scene commands
-    sceneCmd = this->sceneSegment;
-    cmdCode = sceneCmd->base.code;
+    cmd = this->sceneSegment;
+    cmdCode = cmd->base.code;
 
     while (cmdCode != SCENE_CMD_ID_END) {
         switch (cmdCode) {
-            case SCENE_CMD_ID_ROOM_LIST:
-                this->roomList.count = sceneCmd->roomList.length;
-                this->roomList.romFiles = SEGMENTED_TO_VIRTUAL(sceneCmd->roomList.data);
+            case SCENE_CMD_ID_COLLISION_HEADER:
+                colHeader = SEGMENTED_TO_VIRTUAL(cmd->colHeader.data);
+                this->colHeader.minBounds = colHeader->minBounds;
+                this->colHeader.maxBounds = colHeader->maxBounds;
+                this->colHeader.numVertices = colHeader->numVertices;
+                this->colHeader.vtxList = SEGMENTED_TO_VIRTUAL(colHeader->vtxList);
+                this->colHeader.numPolygons = colHeader->numPolygons;
+                this->colHeader.polyList = SEGMENTED_TO_VIRTUAL(colHeader->polyList);
+                this->colHeader.surfaceTypeList = SEGMENTED_TO_VIRTUAL(colHeader->surfaceTypeList);
+                this->colHeader.bgCamList = SEGMENTED_TO_VIRTUAL(colHeader->bgCamList);
+                this->colHeader.numWaterBoxes = colHeader->numWaterBoxes;
+                this->colHeader.waterBoxes = SEGMENTED_TO_VIRTUAL(colHeader->waterBoxes);
+                Preview_UpdateView(this);
+                PRINTF("colheader: minBounds: %d, %d, %d - maxBounds: %d, %d, %d\n", this->colHeader.minBounds.x,
+                       this->colHeader.minBounds.y, this->colHeader.minBounds.z, this->colHeader.maxBounds.x,
+                       this->colHeader.maxBounds.y, this->colHeader.maxBounds.z);
                 break;
+            case SCENE_CMD_ID_ROOM_LIST:
+                this->roomList.count = cmd->roomList.length;
+                this->roomList.romFiles = SEGMENTED_TO_VIRTUAL(cmd->roomList.data);
+                break;
+            case SCENE_CMD_ID_SKYBOX_SETTINGS:
+                this->skyboxId = cmd->skyboxSettings.skyboxId;
+                this->envCtx.skyboxConfig = this->envCtx.changeSkyboxNextConfig = cmd->skyboxSettings.skyboxConfig;
+                this->envCtx.lightMode = cmd->skyboxSettings.envLightMode;
+                break;
+            case SCENE_CMD_ID_LIGHT_SETTINGS_LIST:
+                this->envCtx.numLightSettings = cmd->lightSettingList.length;
+                this->envCtx.lightSettingsList = SEGMENTED_TO_VIRTUAL(cmd->lightSettingList.data);
+                break;
+            case SCENE_CMD_ID_TRANSITION_ACTOR_LIST:
+                this->transitionActors.count = cmd->transiActorList.length;
+                this->transitionActors.list = SEGMENTED_TO_VIRTUAL(cmd->transiActorList.data);
+                break;
+            case SCENE_CMD_ID_SPECIAL_FILES:
+                if (cmd->specialFiles.keepObjectId != OBJECT_INVALID) {
+                    this->objectCtx.subKeepSlot =
+                        Object_SpawnPersistent(&this->objectCtx, cmd->specialFiles.keepObjectId);
+                    gSegments[5] = OS_K0_TO_PHYSICAL(this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
+                }
+                break;
+            case SCENE_CMD_ID_SPAWN_LIST:
+                this->spawnList = SEGMENTED_TO_VIRTUAL(cmd->spawnList.data);
+                break;
+#if ENABLE_ANIMATED_MATERIALS
+            case SCENE_CMD_ID_ANIMATED_MATERIAL_LIST:
+                this->sceneMaterialAnims = SEGMENTED_TO_VIRTUAL(cmd->textureAnimations.segment);
+                break;
+#endif
+
             default:
                 break;
         }
 
-        sceneCmd++;
-        cmdCode = sceneCmd->base.code;
+        cmd++;
+        cmdCode = cmd->base.code;
     }
 }
 
 void Preview_InitRoom(PreviewState* this) {
-    SceneCmd* sceneCmd;
+    SceneCmd* cmd;
     u32 cmdCode;
 
     // init room
@@ -302,20 +422,45 @@ void Preview_InitRoom(PreviewState* this) {
     gSegments[3] = OS_K0_TO_PHYSICAL(this->roomSegment);
 
     // execute room commands
-    sceneCmd = this->roomSegment;
-    cmdCode = sceneCmd->base.code;
+    cmd = this->roomSegment;
+    cmdCode = cmd->base.code;
 
     while (cmdCode != SCENE_CMD_ID_END) {
         switch (cmdCode) {
             case SCENE_CMD_ID_ROOM_SHAPE:
-                this->curRoom.roomShape = SEGMENTED_TO_VIRTUAL(sceneCmd->mesh.data);
+                this->curRoom.roomShape = SEGMENTED_TO_VIRTUAL(cmd->mesh.data);
                 break;
+            case SCENE_CMD_ID_ROOM_BEHAVIOR:
+                this->curRoom.type = cmd->roomBehavior.gpFlag1;
+                this->curRoom.environmentType = cmd->roomBehavior.gpFlag2 & 0xFF;
+                this->curRoom.lensMode = (cmd->roomBehavior.gpFlag2 >> 8) & 1;
+                break;
+            case SCENE_CMD_ID_TIME_SETTINGS:
+                Scene_CommandTimeSettingsImpl(&this->envCtx, cmd);
+                break;
+            case SCENE_CMD_ID_SKYBOX_DISABLES:
+                this->envCtx.skyboxDisabled = cmd->skyboxDisables.skyboxDisabled;
+                this->envCtx.sunMoonDisabled = cmd->skyboxDisables.sunMoonDisabled;
+                break;
+            case SCENE_CMD_ID_OBJECT_LIST:
+                Scene_CommandObjectListImpl(&this->objectCtx, &this->actorCtx, cmd);
+                break;
+            case SCENE_CMD_ID_ACTOR_LIST:
+                this->numActorEntries = cmd->actorEntryList.length;
+                this->actorEntryList = SEGMENTED_TO_VIRTUAL(cmd->actorEntryList.data);
+                break;
+#if ENABLE_F3DEX3
+            case SCENE_CMD_ID_OCC_PLANE_CAND_LIST:
+                this->curRoom.occPlaneCount = cmd->occPlaneCandList.count;
+                this->curRoom.occPlaneList = SEGMENTED_TO_VIRTUAL(cmd->occPlaneCandList.list);
+                break;
+#endif
             default:
                 break;
         }
 
-        sceneCmd++;
-        cmdCode = sceneCmd->base.code;
+        cmd++;
+        cmdCode = cmd->base.code;
     }
 }
 
@@ -326,6 +471,7 @@ void Preview_LoadScene(PreviewState* this) {
 
     // first, reset the state so we start clean (this will free the previous allocations)
     Preview_Reset(this);
+    this->drawConfig = pEntry->drawConfig;
 
     // next, initialize the scene so we know where are the rooms
     this->sceneSegment = Preview_LoadFile(this->state, &pEntry->sceneFile);
@@ -347,9 +493,6 @@ void Preview_Init(PreviewState* this) {
 
 void Preview_Update(PreviewState* this) {
     // PRINTF("state: dmatimer=%d, doload: %d\n", this->dmaTimer, this->doLoad);
-    // PRINTF("x=%.2f, y=%.2f, z=%.2f, x=%d, y=%d, z=%d, x=%.2f, y=%.2f, z=%.2f\n", this->matrixPos.x,
-    // this->matrixPos.y, this->matrixPos.z, this->matrixRot.x, this->matrixRot.y, this->matrixRot.z,
-    // this->matrixScale.x, this->matrixScale.y, this->matrixScale.z);
 
     if (this->dmaTimer == 1) {
         this->doLoad = true;
@@ -365,12 +508,22 @@ void Preview_Update(PreviewState* this) {
         this->doLoad = false;
     }
 
+    gSegments[4] = OS_K0_TO_PHYSICAL(this->objectCtx.slots[this->objectCtx.mainKeepSlot].segment);
+    gSegments[5] = OS_K0_TO_PHYSICAL(this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
+
     if (this->sceneSegment != NULL) {
         gSegments[2] = OS_K0_TO_PHYSICAL(this->sceneSegment);
     }
 
     if (this->roomSegment != NULL) {
         gSegments[3] = OS_K0_TO_PHYSICAL(this->roomSegment);
+    }
+
+    if (this->framesTimer == 0) {
+        this->gameplayFrames++;
+        this->framesTimer = R_UPDATE_RATE == 1 ? 3 : R_UPDATE_RATE == 2 ? 2 : R_UPDATE_RATE == 3 ? 0 : R_UPDATE_RATE;
+    } else {
+        this->framesTimer--;
     }
 }
 
@@ -379,7 +532,7 @@ void Preview_DrawRoomNormal(PreviewState* this) {
     RoomShapeNormal* roomShape;
     RoomShapeDListsEntry* entry;
     s32 i;
-    u32 flags = ROOM_DRAW_OPA /* | ROOM_DRAW_XLU */;
+    u32 flags = ROOM_DRAW_OPA | ROOM_DRAW_XLU;
 
     OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
 
@@ -389,8 +542,7 @@ void Preview_DrawRoomNormal(PreviewState* this) {
         Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
         Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
         Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
-        gSPMatrix(POLY_OPA_DISP++, MATRIX_FINALIZE(gfxCtx, __FILE__, __LINE__),
-                  G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
     }
 
     if (flags & ROOM_DRAW_XLU) {
@@ -399,8 +551,7 @@ void Preview_DrawRoomNormal(PreviewState* this) {
         Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
         Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
         Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
-        gSPMatrix(POLY_XLU_DISP++, MATRIX_FINALIZE(gfxCtx, __FILE__, __LINE__),
-                  G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
     }
 
     roomShape = &this->curRoom.roomShape->normal;
@@ -420,6 +571,136 @@ void Preview_DrawRoomNormal(PreviewState* this) {
     CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
 }
 
+void Preview_DrawRoomCullable(PreviewState* this) {
+    GraphicsContext* gfxCtx = this->state->gfxCtx;
+    RoomShapeCullable* roomShape;
+    RoomShapeCullableEntry* entry;
+    s32 i;
+    u32 flags = ROOM_DRAW_OPA | ROOM_DRAW_XLU;
+
+    OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
+
+    if (flags & ROOM_DRAW_OPA) {
+        gSPSegment(POLY_OPA_DISP++, 0x03, this->roomSegment);
+        Gfx_SetupDL_25Opa(gfxCtx);
+        Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
+        Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
+        Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
+    }
+
+    if (flags & ROOM_DRAW_XLU) {
+        gSPSegment(POLY_XLU_DISP++, 0x03, this->roomSegment);
+        Gfx_SetupDL_25Xlu(gfxCtx);
+        Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
+        Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
+        Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
+    }
+
+    roomShape = &this->curRoom.roomShape->cullable;
+    entry = SEGMENTED_TO_VIRTUAL(roomShape->entries);
+    for (i = 0; i < roomShape->numEntries; i++) {
+        if ((flags & ROOM_DRAW_OPA) && entry->opa != NULL) {
+            gSPDisplayList(POLY_OPA_DISP++, entry->opa);
+        }
+
+        if ((flags & ROOM_DRAW_XLU) && entry->xlu != NULL) {
+            gSPDisplayList(POLY_XLU_DISP++, entry->xlu);
+        }
+
+        entry++;
+    }
+
+    CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
+}
+
+void Preview_DrawRoomImage(PreviewState* this) {
+    GraphicsContext* gfxCtx = this->state->gfxCtx;
+    RoomShapeImageBase* roomShape = &this->curRoom.roomShape->image.base;
+    RoomShapeImageSingle* roomShapeSingle;
+    RoomShapeImageMulti* roomShapeMulti;
+    RoomShapeDListsEntry* entry;
+    u32 flags = ROOM_DRAW_OPA /* | ROOM_DRAW_XLU */;
+    u8 isOpa = flags & ROOM_DRAW_OPA;
+    u8 isXlu = flags & ROOM_DRAW_XLU;
+
+    OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
+
+    if (isOpa) {
+        gSPSegment(POLY_OPA_DISP++, 0x03, this->roomSegment);
+        Gfx_SetupDL_25Opa(gfxCtx);
+        Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
+        Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
+        Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
+    }
+
+    if (isXlu) {
+        gSPSegment(POLY_XLU_DISP++, 0x03, this->roomSegment);
+        Gfx_SetupDL_25Xlu(gfxCtx);
+        Matrix_Translate(this->matrixPos.x, this->matrixPos.y, this->matrixPos.z, MTXMODE_NEW);
+        Matrix_Scale(this->matrixScale.x, this->matrixScale.y, this->matrixScale.z, MTXMODE_APPLY);
+        Matrix_RotateZYX(this->matrixRot.x, this->matrixRot.y, this->matrixRot.z, MTXMODE_APPLY);
+        MATRIX_FINALIZE_AND_LOAD(POLY_OPA_DISP++, gfxCtx, __FILE__, __LINE__);
+    }
+
+    switch (roomShape->amountType) {
+        case ROOM_SHAPE_IMAGE_AMOUNT_SINGLE:
+            roomShapeSingle = &this->curRoom.roomShape->image.single;
+            entry = SEGMENTED_TO_VIRTUAL(roomShapeSingle->base.entry);
+
+            if (isOpa) {
+                gSPDisplayList(POLY_OPA_DISP++, entry->opa);
+            }
+
+            if (isXlu) {
+                gSPDisplayList(POLY_XLU_DISP++, entry->xlu);
+            }
+            break;
+        case ROOM_SHAPE_IMAGE_AMOUNT_MULTI:
+            roomShapeMulti = &this->curRoom.roomShape->image.multi;
+            entry = SEGMENTED_TO_VIRTUAL(roomShapeMulti->base.entry);
+
+            if (isOpa) {
+                gSPDisplayList(POLY_OPA_DISP++, entry->opa);
+            }
+
+            if (isXlu) {
+                gSPDisplayList(POLY_XLU_DISP++, entry->xlu);
+            }
+            break;
+        default:
+            PRINTF("unknown image amount type: %d\n", roomShape->amountType);
+            break;
+    }
+
+    CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
+}
+
+void Preview_HandleDrawConfig(PreviewState* this) {
+    GraphicsContext* gfxCtx = this->state->gfxCtx;
+
+    OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
+
+    switch (this->drawConfig) {
+#if ENABLE_ANIMATED_MATERIALS
+        case SDC_MAT_ANIM:
+            AnimatedMat_Draw(this->state, this->gameplayFrames, this->sceneMaterialAnims);
+            break;
+        case SDC_MAT_ANIM_MANUAL_STEP:
+            AnimatedMat_DrawStep(this->state, this->sceneMaterialAnims, 1);
+            break;
+#endif
+        default:
+            gSPDisplayList(POLY_OPA_DISP++, sDefaultDisplayList);
+            gSPDisplayList(POLY_XLU_DISP++, sDefaultDisplayList);
+            break;
+    }
+
+    CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
+}
+
 void Preview_Draw(PreviewState* this) {
     GraphicsContext* gfxCtx = this->state->gfxCtx;
 
@@ -430,6 +711,16 @@ void Preview_Draw(PreviewState* this) {
     gSPSegment(POLY_OPA_DISP++, 0x00, NULL);
     gSPSegment(POLY_XLU_DISP++, 0x00, NULL);
     gSPSegment(OVERLAY_DISP++, 0x00, NULL);
+
+    gSegments[4] = OS_K0_TO_PHYSICAL(this->objectCtx.slots[this->objectCtx.mainKeepSlot].segment);
+    gSPSegment(POLY_OPA_DISP++, 0x04, this->objectCtx.slots[this->objectCtx.mainKeepSlot].segment);
+    gSPSegment(POLY_XLU_DISP++, 0x04, this->objectCtx.slots[this->objectCtx.mainKeepSlot].segment);
+    gSPSegment(OVERLAY_DISP++, 0x04, this->objectCtx.slots[this->objectCtx.mainKeepSlot].segment);
+
+    gSegments[5] = OS_K0_TO_PHYSICAL(this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
+    gSPSegment(POLY_OPA_DISP++, 0x05, this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
+    gSPSegment(POLY_XLU_DISP++, 0x05, this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
+    gSPSegment(OVERLAY_DISP++, 0x05, this->objectCtx.slots[this->objectCtx.subKeepSlot].segment);
 
     Gfx_SetupFrame(gfxCtx, true, 0, 0, 0);
     Gfx_ClearZBuffer(gfxCtx);
@@ -448,11 +739,24 @@ void Preview_Draw(PreviewState* this) {
         gSPSegment(POLY_XLU_DISP++, 0x02, this->sceneSegment);
         gSPSegment(OVERLAY_DISP++, 0x02, this->sceneSegment);
 
+        Preview_HandleDrawConfig(this);
+
         if (this->roomSegment != NULL) {
             gSegments[3] = OS_K0_TO_PHYSICAL(this->roomSegment);
 
-            if (this->curRoom.roomShape->base.type == ROOM_SHAPE_TYPE_NORMAL) {
-                Preview_DrawRoomNormal(this);
+            switch (this->curRoom.roomShape->base.type) {
+                case ROOM_SHAPE_TYPE_NORMAL:
+                    Preview_DrawRoomNormal(this);
+                    break;
+                case ROOM_SHAPE_TYPE_CULLABLE:
+                    Preview_DrawRoomCullable(this);
+                    break;
+                case ROOM_SHAPE_TYPE_IMAGE:
+                    Preview_DrawRoomImage(this);
+                    break;
+                default:
+                    PRINTF("unknown room shape type: %d\n", this->curRoom.roomShape->base.type);
+                    break;
             }
         } else {
             PRINTF("draw aborted because the room isn't ready\n");
@@ -471,6 +775,7 @@ void Preview_Main(PreviewState* this) {
 }
 
 void Preview_Destroy(PreviewState* this) {
+    Preview_FreeObjectAlloc(this);
     Preview_FreeRoom(this);
     Preview_FreeScene(this);
     memset(this, 0, sizeof(PreviewState));

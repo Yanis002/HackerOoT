@@ -132,12 +132,12 @@ void MapSelect_Main(GameState* thisx) {
     s32 entranceIndex = this->scenes[this->currentScene].entranceIndex;
 
     if (CHECK_BTN_ALL(this->state.input[0].press.button, BTN_START)) {
-        gDebug.preview.overrideInput ^= 1;
         overrideInput ^= 1;
-        PRINTF("input override mode: %d\n", gDebug.preview.overrideInput);
+        PRINTF("input override mode: %d, %d\n", overrideInput);
         return;
     }
 
+    gDebug.preview.overrideInput = overrideInput;
     Preview_SetSceneId(&gDebug.preview, gEntranceTable[entranceIndex < 0 ? 0 : entranceIndex].sceneId);
     Preview_Main(&gDebug.preview);
 
@@ -154,10 +154,15 @@ void MapSelect_Draw(MapSelectState* this) {
     OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
 
     gSPSegment(POLY_OPA_DISP++, 0x00, NULL);
+    gSPSegment(POLY_XLU_DISP++, 0x00, NULL);
+    gSPSegment(OVERLAY_DISP++, 0x00, NULL);
+    gSPSegment(DEBUG_DISP++, 0x00, NULL);
+
     Gfx_SetupFrame(gfxCtx, false, 0, 0, 0);
     SET_FULLSCREEN_VIEWPORT(&this->view);
     View_Apply(&this->view, VIEW_ALL);
     Gfx_SetupDL_28Opa(gfxCtx);
+    Gfx_SetupDL_28(POLY_XLU_DISP++);
 
     if (!this->state.running) {
         MapSelect_DrawLoadingScreen(this);
@@ -514,15 +519,7 @@ void MapSelect_DrawMenu(MapSelectState* this) {
     GraphicsContext* gfxCtx = this->state.gfxCtx;
     GfxPrint* printer;
 
-    OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
-
-    printer = alloca(sizeof(GfxPrint));
-    GfxPrint_Init(printer);
-    GfxPrint_Open(printer, POLY_OPA_DISP);
-
-    GfxPrint_SetColor(printer, 255, 155, 150, 255);
-    GfxPrint_SetPos(printer, 12, 2);
-    GfxPrint_Printf(printer, "Zelda Map Select");
+    Print_Screen(&gDebug.printer, 12, 2, PACK_COLOR(255, 155, 150), "Zelda Map Select");
 
     if (!this->showControls) {
         MapSelect_PrintMenu(this, printer);
@@ -530,28 +527,13 @@ void MapSelect_DrawMenu(MapSelectState* this) {
         MapSelect_PrintSceneLayerSetting(this, printer);
         MapSelect_PrintSpawnNumber(this, printer);
     }
+
     MapSelect_PrintControls(this, printer);
-
-    POLY_OPA_DISP = GfxPrint_Close(printer);
-    GfxPrint_Destroy(printer);
-
-    CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
 }
 
 void MapSelect_DrawLoadingScreen(MapSelectState* this) {
-    GraphicsContext* gfxCtx = this->state.gfxCtx;
-    GfxPrint* printer;
-
-    OPEN_DISPS(gfxCtx, __FILE__, __LINE__);
-
-    printer = alloca(sizeof(GfxPrint));
-    GfxPrint_Init(printer);
-    GfxPrint_Open(printer, POLY_OPA_DISP);
-    MapSelect_PrintLoadingMessage(this, printer, 15);
-    POLY_OPA_DISP = GfxPrint_Close(printer);
-    GfxPrint_Destroy(printer);
-
-    CLOSE_DISPS(gfxCtx, __FILE__, __LINE__);
+    s32 randomMsg = Rand_ZeroOne() * ARRAY_COUNT(sLoadingMessages);
+    Print_Screen(&gDebug.printer, 3, 15, COLOR_WHITE, "%s", sLoadingMessages[randomMsg]);
 }
 
 void MapSelect_LoadTitle(MapSelectState* this) {
@@ -598,16 +580,15 @@ void MapSelect_PrintMenu(MapSelectState* this, GfxPrint* printer) {
     s32 scene;
     s32 i;
     char* name;
+    u32 rgb;
 
     for (i = 0; i < 20; i++) {
-        GfxPrint_SetPos(printer, 4, i + 4);
-
         scene = (this->topDisplayedScene + i + this->sceneTotal) % this->sceneTotal;
         if (scene == this->currentScene) {
-            GfxPrint_SetColor(printer, sColors[this->selectedSceneColor].r, sColors[this->selectedSceneColor].g,
-                              sColors[this->selectedSceneColor].b, sColors[this->selectedSceneColor].a);
+            rgb = PACK_COLOR(sColors[this->selectedSceneColor].r, sColors[this->selectedSceneColor].g,
+                             sColors[this->selectedSceneColor].b);
         } else {
-            GfxPrint_SetColor(printer, 200, 200, 55, 255);
+            rgb = PACK_COLOR(200, 200, 55);
         }
 
         name = this->scenes[scene].name;
@@ -617,38 +598,23 @@ void MapSelect_PrintMenu(MapSelectState* this, GfxPrint* printer) {
 
         if (!scene) {
             // Title Screen
-            GfxPrint_Printf(printer, "%s", name);
+            Print_Screen(&gDebug.printer, 4, i + 4, rgb, "%s", name);
         } else {
-            GfxPrint_Printf(printer, "%03d: %s", scene, name);
+            Print_Screen(&gDebug.printer, 4, i + 4, rgb, "%03d: %s", scene, name);
         }
 
         if (scene == this->currentScene) {
-            GfxPrint_SetPos(printer, 3, i + 4);
-            GfxPrint_Printf(printer, ">");
+            Print_Screen(&gDebug.printer, 3, i + 4, rgb, ">");
         }
     };
 }
 
-void MapSelect_PrintLoadingMessage(MapSelectState* this, GfxPrint* printer, u8 yPos) {
-    s32 randomMsg;
-
-    GfxPrint_SetPos(printer, 3, yPos);
-    GfxPrint_SetColor(printer, 255, 255, 255, 255);
-    randomMsg = Rand_ZeroOne() * ARRAY_COUNT(sLoadingMessages);
-    GfxPrint_Printf(printer, "%s", sLoadingMessages[randomMsg]);
-}
-
 void MapSelect_PrintAgeSetting(MapSelectState* this, GfxPrint* printer, s32 age) {
-    GfxPrint_SetPos(printer, 4, 25);
-    GfxPrint_SetColor(printer, 55, 255, 55, 255);
-    GfxPrint_Printf(printer, "Link's Age: %s", sAgeLabels[age]);
+    Print_Screen(&gDebug.printer, 4, 25, PACK_COLOR(55, 255, 55), "Link's Age: %s", sAgeLabels[age]);
 }
 
 void MapSelect_PrintSceneLayerSetting(MapSelectState* this, GfxPrint* printer) {
     char* label;
-
-    GfxPrint_SetPos(printer, 4, 26);
-    GfxPrint_SetColor(printer, 127, 255, 55, 255);
 
     gSaveContext.save.nightFlag = 0;
 
@@ -716,14 +682,12 @@ void MapSelect_PrintSceneLayerSetting(MapSelectState* this, GfxPrint* printer) {
     };
 
     gSaveContext.skyboxTime = gSaveContext.save.dayTime;
-    GfxPrint_SetColor(printer, 155, 55, 150, 255);
-    GfxPrint_Printf(printer, "Scene Layer: %s", label);
+    Print_Screen(&gDebug.printer, 4, 26, PACK_COLOR(155, 55, 150), "Scene Layer: %s", label);
 }
 
 void MapSelect_PrintSpawnNumber(MapSelectState* this, GfxPrint* printer) {
-    GfxPrint_SetPos(printer, 4, 27);
-    GfxPrint_SetColor(printer, 55, 255, 55, 255);
-    GfxPrint_Printf(printer, "Spawn: %d/%d", MapSelect_GetSpawn(this), MapSelect_GetMaxSpawn(this));
+    Print_Screen(&gDebug.printer, 4, 27, PACK_COLOR(55, 255, 55), "Spawn: %d/%d", MapSelect_GetSpawn(this),
+                 MapSelect_GetMaxSpawn(this));
 }
 
 void MapSelect_PrintControls(MapSelectState* this, GfxPrint* printer) {
@@ -746,10 +710,7 @@ void MapSelect_PrintControls(MapSelectState* this, GfxPrint* printer) {
         }
 
         colors = sColors[i];
-
-        GfxPrint_SetPos(printer, 4, posY);
-        GfxPrint_SetColor(printer, colors.r, colors.g, colors.b, colors.a);
-        GfxPrint_Printf(printer, sControlLabels[i]);
+        Print_Screen(&gDebug.printer, 4, posY, PACK_COLOR(colors.r, colors.g, colors.b), sControlLabels[i]);
 
         // reset the position after the "show/hide" print
         if (i == 0) {
