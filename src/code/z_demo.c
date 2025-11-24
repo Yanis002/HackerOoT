@@ -60,6 +60,14 @@
 
 #include "assets/scenes/misc/hakaana_ouke/hakaana_ouke_scene.h"
 
+#include "ultra64.h"
+#include "sequence.h"
+#include "math.h"
+#include "cutscene.h"
+#include "cutscene_commands.h"
+#include "ocarina.h"
+#include "player.h"
+
 #if ENABLE_CUTSCENE_IMPROVEMENTS
 struct CutsceneCamera sCutsceneCameraInfo;
 #endif
@@ -107,6 +115,14 @@ typedef struct EntranceCutscene {
     /* 0x04 */ void* script;      // cutscene script that should run
 } EntranceCutscene;               // size = 0x8
 
+#include "assets/scenes/mod/cutscenes.c"
+#include "assets/scenes/mod/wasteland.c"
+
+CutsceneData gDummyCs[] = {
+    CS_HEADER(1, 1252),
+    CS_END_OF_SCRIPT(),
+};
+
 EntranceCutscene sEntranceCutsceneTable[] = {
     { ENTR_HYRULE_FIELD_3, 2, EVENTCHKINF_A0, gHyruleFieldIntroCs },
     { ENTR_DEATH_MOUNTAIN_TRAIL_0, 2, EVENTCHKINF_A1, gDMTIntroCs },
@@ -123,7 +139,6 @@ EntranceCutscene sEntranceCutsceneTable[] = {
     { ENTR_HYRULE_FIELD_16, 1, EVENTCHKINF_A9, gHyruleFieldGetOoTCs },
     { ENTR_LAKE_HYLIA_0, 2, EVENTCHKINF_B1, gLakeHyliaIntroCs },
     { ENTR_GERUDO_VALLEY_0, 2, EVENTCHKINF_B2, gGerudoValleyIntroCs },
-    { ENTR_GERUDOS_FORTRESS_0, 2, EVENTCHKINF_B3, gGerudoFortressIntroCs },
     { ENTR_LON_LON_RANCH_0, 2, EVENTCHKINF_B4, gLonLonRanchIntroCs },
     { ENTR_JABU_JABU_0, 2, EVENTCHKINF_B5, gJabuIntroCs },
     { ENTR_GRAVEYARD_0, 2, EVENTCHKINF_B6, gGraveyardIntroCs },
@@ -139,9 +154,12 @@ EntranceCutscene sEntranceCutsceneTable[] = {
     { ENTR_INSIDE_GANONS_CASTLE_6, 2, EVENTCHKINF_BF, gLightBarrierCs },
     { ENTR_INSIDE_GANONS_CASTLE_7, 2, EVENTCHKINF_AD, gSpiritBarrierCs },
     { ENTR_SPIRIT_TEMPLE_BOSS_0, 0, EVENTCHKINF_C0, gSpiritBossNabooruKnuckleIntroCs },
-    { ENTR_GERUDOS_FORTRESS_17, 0, EVENTCHKINF_C7, gGerudoFortressFirstCaptureCs },
     { ENTR_DEATH_MOUNTAIN_CRATER_1, 2, EVENTCHKINF_B9, gDeathMountainCraterIntroCs },
     { ENTR_KOKIRI_FOREST_12, 2, EVENTCHKINF_C6, gKokiriForestDekuSproutPart3Cs },
+
+    { ENTR_GERUDOS_FORTRESS_17, 0, EVENTCHKINF_C7, gModGerudoFortressFirstCaptureCs },
+    { ENTR_HAUNTED_WASTELAND_0, 2, EVENTCHKINF_C6, gModWastelandCs },
+    { ENTR_GERUDOS_FORTRESS_0, 2, EVENTCHKINF_B3, gModEndingCs },
 };
 
 void* sCutscenesUnknownList[] = {
@@ -1479,6 +1497,20 @@ void CutsceneCmd_Destination(PlayState* play, CutsceneContext* csCtx, CsCmdDesti
                 play->transitionTrigger = TRANS_TRIGGER_START;
                 play->transitionType = TRANS_TYPE_FADE_WHITE;
                 break;
+            
+            case CS_DEST_WASTELAND:
+                play->linkAgeOnLoad = LINK_AGE_ADULT;
+                play->nextEntranceIndex = ENTR_HAUNTED_WASTELAND_0;
+                play->transitionTrigger = TRANS_TRIGGER_START;
+                play->transitionType = TRANS_TYPE_FADE_WHITE;
+                break;
+            
+            case CS_DEST_FORTRESS_2:
+                play->linkAgeOnLoad = LINK_AGE_ADULT;
+                play->nextEntranceIndex = ENTR_GERUDOS_FORTRESS_0;
+                play->transitionTrigger = TRANS_TRIGGER_START;
+                play->transitionType = TRANS_TYPE_FADE_WHITE;
+                break;
         }
     }
 }
@@ -2310,22 +2342,20 @@ void Cutscene_ProcessScript(PlayState* play, CutsceneContext* csCtx, u8* script)
 void CutsceneHandler_RunScript(PlayState* play, CutsceneContext* csCtx) {
     if (gSaveContext.save.cutsceneIndex >= CS_INDEX_0) {
 #if CAN_SHOW_CS_INFOS
-        if (BREG(0) != 0) {
-            Gfx* displayList;
-            Gfx* prevDisplayList;
+        Gfx* displayList;
+        Gfx* prevDisplayList;
 
-            OPEN_DISPS(play->state.gfxCtx, "../z_demo.c", 4101);
+        OPEN_DISPS(play->state.gfxCtx, "../z_demo.c", 4101);
 
-            prevDisplayList = POLY_OPA_DISP;
-            displayList = Gfx_Open(POLY_OPA_DISP);
-            gSPDisplayList(OVERLAY_DISP++, displayList);
-            Cutscene_DrawDebugInfo(play, &displayList, csCtx);
-            gSPEndDisplayList(displayList++);
-            Gfx_Close(prevDisplayList, displayList);
-            POLY_OPA_DISP = displayList;
+        prevDisplayList = POLY_OPA_DISP;
+        displayList = Gfx_Open(POLY_OPA_DISP);
+        gSPDisplayList(OVERLAY_DISP++, displayList);
+        Cutscene_DrawDebugInfo(play, &displayList, csCtx);
+        gSPEndDisplayList(displayList++);
+        Gfx_Close(prevDisplayList, displayList);
+        POLY_OPA_DISP = displayList;
 
-            CLOSE_DISPS(play->state.gfxCtx, "../z_demo.c", 4108);
-        }
+        CLOSE_DISPS(play->state.gfxCtx, "../z_demo.c", 4108);
 #endif
 
         csCtx->curFrame++;

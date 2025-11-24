@@ -242,7 +242,7 @@ void Profiler_Draw(GraphicsContext* gfxCtx) {
         }
         GfxPrint_SetBasePosPx(&printer, 6, 4);
         GfxPrint_SetColor32(&printer, 0xFFFFFFFF);
-        GfxPrint_Printf(&printer, "%4.1f", fps);
+        // GfxPrint_Printf(&printer, "%4.1f", fps);
     } else {
         OSTime tOverall = 0, tRDP = 0, tRSPOverall = 0, tRSPGfx = 0, tRSPAudio = 0, tRSPOther = 0;
         OSTime tThreads[NUM_THREADS];

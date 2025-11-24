@@ -74,6 +74,9 @@ static MapSelectEntry sScenes[] = {
     { "Boot Menu", (void*)MapSelect_LoadDebugOpening, 0 },
 #endif
     { "Title Screen", (void*)MapSelect_LoadTitle, 0 },
+    { "Start", MapSelect_LoadGame, ENTR_GERUDOS_FORTRESS_17 },
+    { "Wasteland", MapSelect_LoadGame, ENTR_HAUNTED_WASTELAND_0 },
+    { "Ending", MapSelect_LoadGame, ENTR_GERUDOS_FORTRESS_0 },
 #if CAN_INCLUDE_EXAMPLE_SCENE
     { "Example", MapSelect_LoadGame, ENTR_EXAMPLE_0 },
 #endif
@@ -89,8 +92,6 @@ static MapSelectEntry sScenes[] = {
     { "Gerudo Valley", MapSelect_LoadGame, ENTR_GERUDO_VALLEY_0 },
     { "Lost Woods", MapSelect_LoadGame, ENTR_LOST_WOODS_0 },
     { "Desert Colossus", MapSelect_LoadGame, ENTR_DESERT_COLOSSUS_0 },
-    { "Gerudo's Fortress", MapSelect_LoadGame, ENTR_GERUDOS_FORTRESS_0 },
-    { "Haunted Wasteland", MapSelect_LoadGame, ENTR_HAUNTED_WASTELAND_0 },
     { "Hyrule Castle", MapSelect_LoadGame, ENTR_HYRULE_CASTLE_0 },
     { "Death Mountain Trail", MapSelect_LoadGame, ENTR_DEATH_MOUNTAIN_TRAIL_0 },
     { "Death Mountain Crater", MapSelect_LoadGame, ENTR_DEATH_MOUNTAIN_CRATER_0 },
