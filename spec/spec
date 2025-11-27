@@ -682,6 +682,7 @@ beginseg
 #if DEBUG_FEATURES
     include "$(BUILD_DIR)/src/code/ucode_disas.o"
 #endif
+    include "$(BUILD_DIR)/src/code/bloom.o"
 
     // audio
 #if OOT_VERSION < NTSC_1_1 || !PLATFORM_N64

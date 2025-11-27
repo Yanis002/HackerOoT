@@ -73,7 +73,7 @@
 /**
  * @brief Space allocated for the Overlay buffer. Vanilla value is `0x400`.
  */
-#define OVERLAY_BUFFER_SIZE 0x400
+#define OVERLAY_BUFFER_SIZE 0x1000
 
 /**
  * @brief Space allocated for the Work buffer. Vanilla value is `0x80`.

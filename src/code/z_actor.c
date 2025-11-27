@@ -29,6 +29,8 @@
 #include "skin_matrix.h"
 #include "config.h"
 #include "widescreen.h"
+#include "controller.h"
+#include "letterbox.h"
 
 #include "overlays/actors/ovl_Arms_Hook/z_arms_hook.h"
 #include "overlays/actors/ovl_En_Part/z_en_part.h"
@@ -3009,6 +3011,13 @@ void Actor_DrawAll(PlayState* play, ActorContext* actorCtx) {
 
     if (IREG(32) == 0) {
         Lights_DrawGlow(play);
+    }
+
+    if (CHECK_BTN_ALL(play->state.input[0].cur.button, BTN_L)) { // For testing
+        void PreRender_BloomShader(Gfx** gfxP, u32 yl, u32 yh, u8 alpha1, u8 alpha2);
+
+        u32 lb = Letterbox_GetSize();
+        PreRender_BloomShader((Gfx**)&OVERLAY_DISP, lb, SCREEN_HEIGHT - lb, 25, 85);
     }
 
     if (!DEBUG_FEATURES || (HREG(64) != 1) || (HREG(75) != 0)) {

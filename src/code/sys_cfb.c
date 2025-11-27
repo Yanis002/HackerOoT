@@ -41,16 +41,19 @@ void SysCfb_Init(s32 n64dd) {
     }
 
     screenSize = SCREEN_WIDTH * SCREEN_HEIGHT;
-    sSysCfbEnd &= ~0x3F;
+    // sSysCfbEnd &= ~0x3F;
+    sSysCfbEnd = 0x80700000 + screenSize * 2;
 
     if (1) {}
 
     PRINTF(T("システムが使用する最終アドレスは %08x です\n", "The final address used by the system is %08x\n"),
            sSysCfbEnd);
-    sSysCfbFbPtr[0] = sSysCfbEnd - (screenSize * 4);
-    sSysCfbFbPtr[1] = sSysCfbEnd - (screenSize * 2);
-    PRINTF(T("フレームバッファのアドレスは %08x と %08x です\n", "Frame buffer addresses are %08x and %08x\n"),
-           sSysCfbFbPtr[0], sSysCfbFbPtr[1]);
+    // sSysCfbFbPtr[0] = sSysCfbEnd - (screenSize * 4);
+    // sSysCfbFbPtr[1] = sSysCfbEnd - (screenSize * 2);
+    sSysCfbFbPtr[0] = 0x80600000;
+    sSysCfbFbPtr[1] = 0x80700000;
+    PRINTF(T("フレームバッファのアドレスは %08x と %08x です\n", "Frame buffer addresses are %08x (%08x) and %08x (%08x)\n"),
+           sSysCfbFbPtr[0], sSysCfbEnd - (screenSize * 4), sSysCfbFbPtr[1], sSysCfbEnd - (screenSize * 2));
 }
 
 void SysCfb_Reset(void) {
