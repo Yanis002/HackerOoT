@@ -67,8 +67,10 @@ Use ``./new_actor.py --help`` for instructions on easily adding a new actor to t
 
 ## Changing build options
 
-The project Makefile is fairly configurable and can be used to build other versions of the game or prepare the repo for modding.
-See the options outlined at the top of the Makefile for more information.
+By default, if you don't specify a version to build with `VERSION=<the-version>` in the make commands, the `gc-eu-mq-dbg` version is used.
+This default can be changed in the Makefile.
+
+The project Makefile is fairly configurable and can also be used to prepare the repo for modding.
 
 ## Contributing
 

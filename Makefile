@@ -357,7 +357,7 @@ else
   LD_OUTPUT_FORMAT := $(shell $(LD) --print-output-format | sed -E 's/elf(32|64)-(n)?(trad)?(big|little)mips/elf\1-\3\4mips/')
 endif
  
-CPPFLAGS += -P -xc -fno-dollars-in-identifiers $(CPP_DEFINES)
+CPPFLAGS += -P -xc -fno-dollars-in-identifiers $(CPP_DEFINES) $(GBI_DEFINES)
 ASFLAGS += -march=vr4300 -mabi=$(ABI) $(ABI_FLAGS) -no-pad-sections -Iinclude -I$(EXTRACTED_DIR)
 
 ifeq ($(COMPILER),gcc)
@@ -480,7 +480,6 @@ UCODE_FILES   := $(foreach f,$(UCODE_PATCHES:.bps=),$f)
 UCODE_O_FILES := $(foreach f,$(UCODE_FILES),$(BUILD_DIR)/$f.o)
 
 # Automatic dependency files
-# (Only asm_processor dependencies and reloc dependencies are handled for now)
 DEP_FILES := $(O_FILES:.o=.d) $(O_FILES:.o=.asmproc.d) $(OVL_RELOC_FILES:.o=.d) $(BUILD_DIR)/spec.d
 
 TEXTURE_FILES_PNG_EXTRACTED := $(foreach dir,$(ASSET_BIN_DIRS_EXTRACTED),$(wildcard $(dir)/*.png))

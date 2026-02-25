@@ -8302,7 +8302,7 @@ void Player_ChooseNextIdleAnim(PlayState* play, Player* this) {
 
 void Player_Action_Idle(Player* this, PlayState* play) {
     s32 idleAnimResult = Player_CheckForIdleAnim(this);
-    s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
+    s32 animFinished = LinkAnimation_Update(play, &this->skelAnime);
     f32 speedTarget;
     s16 yawTarget;
     s16 yawDiff;
@@ -8311,7 +8311,7 @@ void Player_Action_Idle(Player* this, PlayState* play) {
         Player_ProcessFidgetAnimSfxList(this, idleAnimResult - 1);
     }
 
-    if (animDone) {
+    if (animFinished) {
         if (this->av2.fallDamageStunTimer != 0) {
             if (DECR(this->av2.fallDamageStunTimer) == 0) {
                 this->skelAnime.endFrame = this->skelAnime.animLength - 1.0f;
@@ -8566,11 +8566,10 @@ void func_808416C0(Player* this, PlayState* play) {
 }
 
 void Player_Action_8084170C(Player* this, PlayState* play) {
-    s32 sp34;
+    s32 animFinished = LinkAnimation_Update(play, &this->skelAnime);
     f32 speedTarget;
     s16 yawTarget;
 
-    sp34 = LinkAnimation_Update(play, &this->skelAnime);
     Player_DecelerateToZero(this);
 
     if (!Player_TryActionHandlerList(play, this, sActionHandlerList4, true)) {
@@ -8581,7 +8580,7 @@ void Player_Action_8084170C(Player* this, PlayState* play) {
 
             if (func_8083FD78(this, &speedTarget, &yawTarget, play) > 0) {
                 func_8083C858(this, play);
-            } else if ((speedTarget != 0.0f) || (sp34 != 0)) {
+            } else if ((speedTarget != 0.0f) || animFinished) {
                 func_808416C0(this, play);
             }
         }
@@ -8589,12 +8588,10 @@ void Player_Action_8084170C(Player* this, PlayState* play) {
 }
 
 void Player_Action_808417FC(Player* this, PlayState* play) {
-    s32 sp1C;
-
-    sp1C = LinkAnimation_Update(play, &this->skelAnime);
+    s32 animFinished = LinkAnimation_Update(play, &this->skelAnime);
 
     if (!Player_TryActionHandlerList(play, this, sActionHandlerList4, true)) {
-        if (sp1C != 0) {
+        if (animFinished) {
             func_80839F30(this, play);
         }
     }
@@ -8875,11 +8872,9 @@ void Player_Action_8084227C(Player* this, PlayState* play) {
 }
 
 void Player_Action_808423EC(Player* this, PlayState* play) {
-    s32 sp34;
+    s32 animFinished = LinkAnimation_Update(play, &this->skelAnime);
     f32 speedTarget;
     s16 yawTarget;
-
-    sp34 = LinkAnimation_Update(play, &this->skelAnime);
 
     if (!Player_TryActionHandlerList(play, this, sActionHandlerList5, true)) {
         if (!Player_IsZTargetingWithHostileUpdate(this)) {
@@ -8897,7 +8892,7 @@ void Player_Action_808423EC(Player* this, PlayState* play) {
                 return;
             }
 
-            if (sp34 != 0) {
+            if (animFinished) {
                 func_8083CD00(this, play);
             }
         }
@@ -8905,11 +8900,9 @@ void Player_Action_808423EC(Player* this, PlayState* play) {
 }
 
 void Player_Action_8084251C(Player* this, PlayState* play) {
-    s32 sp34;
+    s32 animFinished = LinkAnimation_Update(play, &this->skelAnime);
     f32 speedTarget;
     s16 yawTarget;
-
-    sp34 = LinkAnimation_Update(play, &this->skelAnime);
 
     Player_DecelerateToZero(this);
 
@@ -8924,7 +8917,7 @@ void Player_Action_8084251C(Player* this, PlayState* play) {
                 return;
             }
 
-            if ((speedTarget != 0.0f) || (sp34 != 0)) {
+            if ((speedTarget != 0.0f) || animFinished) {
                 func_80839F90(this, play);
             }
         }
@@ -9706,7 +9699,7 @@ static AnimSfxEntry sRollAnimSfxList[] = {
 void Player_Action_Roll(Player* this, PlayState* play) {
     Actor* ocCollidedActor;
     s32 interruptResult;
-    s32 animDone;
+    s32 animFinished;
     DynaPolyActor* wallPolyActor;
     s32 pad;
     f32 speedTarget;
@@ -9715,7 +9708,7 @@ void Player_Action_Roll(Player* this, PlayState* play) {
     this->stateFlags2 |= PLAYER_STATE2_5;
 
     ocCollidedActor = NULL;
-    animDone = LinkAnimation_Update(play, &this->skelAnime);
+    animFinished = LinkAnimation_Update(play, &this->skelAnime);
 
     if (LinkAnimation_OnFrame(&this->skelAnime, 8.0f)) {
         Player_SetInvulnerability(this, FRAMERATE_CONST(-10, -8));
@@ -9728,7 +9721,7 @@ void Player_Action_Roll(Player* this, PlayState* play) {
             interruptResult = Player_TryActionInterrupt(play, this, &this->skelAnime, 5.0f);
 
             if ((interruptResult != PLAYER_INTERRUPT_NEW_ACTION) &&
-                ((interruptResult >= PLAYER_INTERRUPT_MOVE) || animDone)) {
+                ((interruptResult >= PLAYER_INTERRUPT_MOVE) || animFinished)) {
                 func_8083A060(this, play);
             }
         } else {
@@ -10070,12 +10063,12 @@ void Player_Action_80845308(Player* this, PlayState* play) {
 }
 
 void Player_Action_80845668(Player* this, PlayState* play) {
-    s32 sp3C;
+    s32 animFinished;
     s32 interruptResult;
     f32 temp3;
 
     this->stateFlags2 |= PLAYER_STATE2_5;
-    sp3C = LinkAnimation_Update(play, &this->skelAnime);
+    animFinished = LinkAnimation_Update(play, &this->skelAnime);
 
     if (this->skelAnime.animation == &gPlayerAnim_link_normal_250jump_start) {
         this->speedXZ = 1.0f;
@@ -10108,7 +10101,7 @@ void Player_Action_80845668(Player* this, PlayState* play) {
             return;
         }
 
-        if ((sp3C != 0) || (interruptResult >= PLAYER_INTERRUPT_MOVE)) {
+        if (animFinished || (interruptResult >= PLAYER_INTERRUPT_MOVE)) {
             func_8083C0E8(this, play);
             this->stateFlags1 &= ~(PLAYER_STATE1_14 | PLAYER_STATE1_18);
             return;
@@ -10212,7 +10205,7 @@ s32 func_80845964(PlayState* play, Player* this, CsCmdActorCue* cue, f32 arg3, s
         func_8083BF50(this, play);
     }
 
-    return 0;
+    return false;
 }
 
 s32 func_80845BA0(PlayState* play, Player* this, f32* arg2, s32 arg3) {
@@ -10303,14 +10296,14 @@ void Player_Action_80845CA4(Player* this, PlayState* play) {
 }
 
 void Player_Action_80845EF8(Player* this, PlayState* play) {
-    s32 sp2C;
+    s32 animFinished;
 
     this->stateFlags2 |= PLAYER_STATE2_5;
-    sp2C = LinkAnimation_Update(play, &this->skelAnime);
+    animFinished = LinkAnimation_Update(play, &this->skelAnime);
 
     Player_UpdateUpperBody(this, play);
 
-    if (sp2C) {
+    if (animFinished) {
         if (this->av2.actionVar2 == 0) {
             if (DECR(this->doorTimer) == 0) {
                 this->av2.actionVar2 = 1;
@@ -12984,7 +12977,7 @@ void Player_Action_8084BF1C(Player* this, PlayState* play) {
     }
 
     if ((this->av2.actionVar2 < 0) || !func_8083FBC0(this, play)) {
-        if (LinkAnimation_Update(play, &this->skelAnime) != 0) {
+        if (LinkAnimation_Update(play, &this->skelAnime)) {
             if (this->av2.actionVar2 < 0) {
                 this->av2.actionVar2 = ABS(this->av2.actionVar2) & 1;
                 return;

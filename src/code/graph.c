@@ -50,7 +50,11 @@ OSTime sGraphPrevTaskTimeStart;
 #if ENABLE_F3DEX3
 #define GRAPH_UCODE_GLOBAL_SYMBOL gF3DEX3TextBuffer
 #else
+#ifndef F3DEX_GBI_PL
+#define GRAPH_UCODE_GLOBAL_SYMBOL gspF3DZEX2_NoN_fifoTextStart
+#else
 #define GRAPH_UCODE_GLOBAL_SYMBOL gspF3DZEX2_NoN_PosLight_fifoTextStart
+#endif
 #endif
 
 #if IS_MOTION_BLUR_ENABLED
