@@ -130,6 +130,14 @@ else ifeq ($(VERSION),gc-us-mq)
   BUILD_DATE := 02-12-19
   BUILD_TIME := 14:05:42
   REVISION := 15
+else ifeq ($(VERSION),gc-eu-dbg-2)
+  REGION ?= EU
+  PLATFORM := GC
+  DEBUG_FEATURES ?= 1
+  BUILD_CREATOR := zelda@srd022j
+  BUILD_DATE := 03-02-13
+  BUILD_TIME := 19:46:49
+  REVISION := 15
 else ifeq ($(VERSION),gc-eu-mq-dbg)
   REGION ?= EU
   PLATFORM := GC
@@ -310,9 +318,10 @@ MKLDSCRIPT := tools/mkldscript
 MKDMADATA  := tools/mkdmadata
 ELF2ROM    := tools/elf2rom
 BIN2C      := tools/bin2c
-N64TEXCONV := tools/assets/n64texconv/n64texconv
 FADO       := tools/fado/fado.elf
 PYTHON     ?= $(VENV)/bin/python3
+BUILD_FROM_PNG := tools/assets/build_from_png/build_from_png
+BUILD_JFIF := tools/assets/build_jfif/build_jfif
 
 # Command to replace $(BUILD_DIR) and $(F3DEX3_DIR) in some files with the build path.
 # We can't use the C preprocessor for this because it won't substitute inside string literals.
@@ -831,24 +840,24 @@ $(BUILD_DIR)/src/overlays/%_reloc.o: $(BUILD_DIR)/spec
 # Assets from assets/
 
 $(BUILD_DIR)/assets/%.inc.c: assets/%.png
-	$(V)tools/assets/build_from_png/build_from_png $< $(dir $@) assets/$(dir $*) $(wildcard $(EXTRACTED_DIR)/assets/$(dir $*))
+	$(V)$(BUILD_FROM_PNG) $< $(dir $@) assets/$(dir $*) $(wildcard $(EXTRACTED_DIR)/assets/$(dir $*))
 
 $(BUILD_DIR)/assets/%.bin.inc.c: assets/%.bin
 	$(V)$(BIN2C) -t 1 $< $@
 
 $(BUILD_DIR)/assets/%.jpg.inc.c: assets/%.jpg
-	$(V)$(N64TEXCONV) JFIF "" $< $@
+	$(V)$(BUILD_JFIF) $< $@
 
 # Assets from extracted/
 
 $(BUILD_DIR)/assets/%.inc.c: $(EXTRACTED_DIR)/assets/%.png
-	$(V)tools/assets/build_from_png/build_from_png $< $(dir $@) $(wildcard assets/$(dir $*)) $(EXTRACTED_DIR)/assets/$(dir $*)
+	$(V)$(BUILD_FROM_PNG) $< $(dir $@) $(wildcard assets/$(dir $*)) $(EXTRACTED_DIR)/assets/$(dir $*)
 
 $(BUILD_DIR)/assets/%.bin.inc.c: $(EXTRACTED_DIR)/assets/%.bin
 	$(V)$(BIN2C) -t 1 $< $@
 
 $(BUILD_DIR)/assets/%.jpg.inc.c: $(EXTRACTED_DIR)/assets/%.jpg
-	$(V)$(N64TEXCONV) JFIF "" $< $@
+	$(V)$(BUILD_JFIF) $< $@
 
 # Audio
 
