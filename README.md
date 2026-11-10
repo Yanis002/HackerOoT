@@ -72,10 +72,7 @@ See the options outlined at the top of the Makefile for more information.
 
 ## Contributing
 
-All contributions are welcome. This is a group effort, and even small contributions can make a difference.
-Some tasks also don't require much knowledge to get started.
-
-Most discussions happen on our [Discord Server](https://discord.gg/brETAakcXr), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project. **Feel free to ask any kind of questions.**
+See [CONTRIBUDING.md](./CONTRIBUTING.md).
 
 ## Contributors
 
