@@ -74,6 +74,10 @@ See the options outlined at the top of the Makefile for more information.
 
 See [CONTRIBUDING.md](./CONTRIBUTING.md).
 
+### AI Policy
+
+You can find our policy regarding AI in [CONTRIBUDING.md](./CONTRIBUTING.md).
+
 ## Contributors
 
 List of every HackerOoT contributors, from most recent to oldest contribution:
